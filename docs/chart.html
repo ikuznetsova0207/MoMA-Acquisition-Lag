@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MoMA Acquisition Lag</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #f5f4f0; }
+  @media (prefers-color-scheme: dark) { body { background: #131210; } }
+  :root {
+    --surface: #f5f4f0;
+    --panel: #fbfaf6;
+    --panel-border: #e3ded0;
+    --ink: #17140f;
+    --ink-secondary: #55503f;
+    --ink-muted: #918a76;
+    --hairline: #e6e1d2;
+    --accent: #2d5c56;
+    --accent-soft: #dde8e5;
+    --series-male: #2a78d6;
+    --series-female: #eb6834;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #131210; --panel: #1a1917; --panel-border: #322e26;
+      --ink: #f4f2ea; --ink-secondary: #c7c0ac; --ink-muted: #8f8874;
+      --hairline: #322e26; --accent: #6fb3a8; --accent-soft: #22322f;
+      --series-male: #3987e5; --series-female: #d95926;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface: #131210; --panel: #1a1917; --panel-border: #322e26;
+    --ink: #f4f2ea; --ink-secondary: #c7c0ac; --ink-muted: #8f8874;
+    --hairline: #322e26; --accent: #6fb3a8; --accent-soft: #22322f;
+    --series-male: #3987e5; --series-female: #d95926;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--surface);
+    color: var(--ink);
+    font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 44px 24px 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(24px, 4vw, 30px);
+    line-height: 1.2;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .explainer {
+    font-size: 15.5px;
+    line-height: 1.65;
+    color: var(--ink-secondary);
+    max-width: 60ch;
+  }
+  .explainer b { color: var(--ink); }
+
+  .headline-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--accent-soft);
+    border-radius: 3px;
+    width: fit-content;
+  }
+  .headline-stat .num {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: 28px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .headline-stat .label { font-size: 13.5px; line-height: 1.4; color: var(--ink-secondary); max-width: 32ch; }
+
+  .panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 6px; padding: 22px 22px 14px; }
+  .panel-title { font-size: 14.5px; font-weight: 600; margin: 0 0 2px; }
+  .panel-sub { font-size: 13px; color: var(--ink-muted); margin: 0 0 8px; }
+
+  .legend { display: flex; gap: 18px; font-size: 13px; color: var(--ink-secondary); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 20px; height: 3px; border-radius: 2px; display: inline-block; }
+
+  .chart-scroll { overflow-x: auto; }
+  svg { display: block; }
+  .axis-label { font-family: "IBM Plex Mono", monospace; font-size: 11px; fill: var(--ink-muted); }
+  .gridline { stroke: var(--hairline); stroke-width: 1; }
+  .axis-line { stroke: var(--panel-border); stroke-width: 1; }
+  .line-male { fill: none; stroke: var(--series-male); stroke-width: 2.5; }
+  .line-female { fill: none; stroke: var(--series-female); stroke-width: 2.5; }
+  .dot-male { fill: var(--series-male); }
+  .dot-female { fill: var(--series-female); }
+  .value-label { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500; }
+  .value-male { fill: var(--series-male); }
+  .value-female { fill: var(--series-female); }
+  .no-data-label { font-family: "IBM Plex Mono", monospace; font-size: 10px; fill: var(--ink-muted); font-style: italic; }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 14px; }
+  table.data-table caption { text-align: left; font-size: 12px; color: var(--ink-muted); margin-bottom: 8px; }
+  table.data-table th, table.data-table td { text-align: right; padding: 6px 9px; border-bottom: 1px solid var(--hairline); font-variant-numeric: tabular-nums; }
+  table.data-table th:first-child, table.data-table td:first-child { text-align: left; font-variant-numeric: normal; }
+  table.data-table thead th { color: var(--ink-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .caveats { font-size: 13px; line-height: 1.65; color: var(--ink-secondary); }
+  .caveats h2 { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); font-weight: 600; margin: 0 0 8px; }
+  .caveats ul { margin: 0; padding-left: 18px; }
+  .caveats li { margin-bottom: 5px; }
+
+  .prose p { font-size: 13.5px; line-height: 1.7; color: var(--ink-secondary); margin: 0 0 12px; }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose b { color: var(--ink); }
+
+  footer { font-size: 12px; color: var(--ink-muted); border-top: 1px solid var(--hairline); padding-top: 14px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div>
+    <h1>Women's work waits less, not more</h1>
+    <p class="explainer">This chart tracks one number, decade by decade: on average, <b>how many years pass between an artwork being made and MoMA acquiring it</b>. There is a separate line for male and female artists. If MoMA mainly acquired women's work later, to correct for overlooked artists, the orange line would sit above the blue one. Instead it sits <b>below</b> it in almost every decade. MoMA has generally acquired women's work sooner after it was made, not later.</p>
+  </div>
+
+  <div class="headline-stat">
+    <span class="num" id="headlineGap">...</span>
+    <span class="label">Women's average wait minus men's average wait, across all 142,505 works. A negative number means women waited less.</span>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">How "acquisition lag" and the "Gap" are calculated</p>
+    <p class="panel-sub" style="margin-bottom:10px;">Three steps, done for every one of the 142,505 artworks before we average anything. The sign of the Gap is chosen on purpose, so it answers our question directly.</p>
+    <ol style="margin:0 0 10px; padding-left: 20px; font-size: 13.5px; line-height: 1.75; color: var(--ink-secondary);">
+      <li><b>Per artwork:</b> Lag = year acquired &minus; year created.</li>
+      <li><b>Split into groups, one per decade and gender combination</b> (for example, "1980s, female" is one group, "1980s, male" is a separate one). <b>Then average the Lag values inside each group.</b></li>
+      <li><b>Gap = women's average minus men's average.</b> <span style="color:var(--ink-muted)">Example from the 2020s: 33.4 minus 46.9 equals <b>&minus;13.5</b>.</span> A <b>negative</b> Gap means women's work was acquired sooner after it was made. This is the opposite of what we would expect if MoMA were slowly correcting for overlooked women. A positive Gap would mean the opposite: women's work sat around longer. The 1970s is the only decade where this happens, and even then the two averages are almost equal.</li>
+    </ol>
+    <p class="panel-sub" style="margin: 0 0 6px; font-weight:600; color:var(--ink-secondary);">Try it yourself: per-artwork Lag</p>
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13.5px;">
+      <span>Year created</span>
+      <input type="number" id="calcCreated" value="1975" style="width:80px; padding:5px 7px; border:1px solid var(--panel-border); border-radius:4px; background:var(--surface); color:var(--ink); font-family:'IBM Plex Mono',monospace;">
+      <span>&middot; Year acquired</span>
+      <input type="number" id="calcAcquired" value="1990" style="width:80px; padding:5px 7px; border:1px solid var(--panel-border); border-radius:4px; background:var(--surface); color:var(--ink); font-family:'IBM Plex Mono',monospace;">
+      <span>&middot; Lag =</span>
+      <b id="calcResult" style="font-family:'IBM Plex Mono',monospace; color:var(--accent);">15 years</b>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Explore the Gap by decade</p>
+    <p class="panel-sub" style="margin-bottom:10px;">Pick a decade and see the two averages and the Gap between them, computed live from the same data as the chart below.</p>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+      <label for="decadePicker" style="font-size:13.5px; color:var(--ink-secondary);">Decade acquired:</label>
+      <select id="decadePicker" style="padding:6px 10px; border:1px solid var(--panel-border); border-radius:4px; background:var(--surface); color:var(--ink); font-family:'Public Sans',sans-serif; font-size:13.5px; font-weight:600;"></select>
+    </div>
+    <div id="decadeResult" style="display:flex; gap:24px; flex-wrap:wrap; font-size:13.5px;"></div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Average years from creation to acquisition, by decade</p>
+    <p class="panel-sub">Each dot is one decade's average. The numbers are printed on the chart, so there is no need to hover.</p>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--series-male)"></span>Male artists</span>
+      <span><span class="swatch" style="background:var(--series-female)"></span>Female artists</span>
+    </div>
+    <div class="chart-scroll">
+      <svg id="chart" viewBox="0 0 660 412" role="img" aria-label="Line chart: average acquisition lag in years, by decade, for male and female artists"></svg>
+    </div>
+
+    <table class="data-table">
+      <caption>Same numbers, as a table. Gap: negative = women waited less, positive = women waited more.</caption>
+      <thead>
+        <tr><th>Decade</th><th>Male avg (yrs)</th><th>Male, n</th><th>Female avg (yrs)</th><th>Female, n</th><th>Gap (F&minus;M)</th></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="caveats panel">
+    <h2>Worth knowing before you trust this</h2>
+    <ul>
+      <li><b>142,505 of the 160,705 artworks in the cleaned dataset are used here, not all of them.</b> A row is excluded if either the creation year or the acquisition date could not be determined (about 9,453 works), or if the artist's gender was recorded as something other than exactly "male" or "female" (about 9,967 works, including missing gender and about 120 works by non-binary, transgender, or gender-nonconforming artists, too few to analyze as their own group here).</li>
+      <li><b>Sample sizes are very unequal.</b> Men outnumber women roughly 6 to 1 in this collection overall, and even more before 1960. The 1920s has zero attributed acquisitions by women, so that point is missing, not zero.</li>
+      <li><b>A small number of records, 93 out of 142,505, show an artwork acquired slightly before its listed creation year.</b> This is almost always because the creation date is approximate ("circa"), not a data error. These records are included in the averages. Their effect on the results is very small.</li>
+    </ul>
+  </div>
+
+  <div class="panel prose">
+    <p class="panel-title" style="margin-bottom:12px;">Conclusion</p>
+    <p><b>Research question:</b> Is MoMA's increasing representation of women artists driven by acquiring their work in real time, or by retroactively "correcting" the collection, i.e., acquiring older, previously-overlooked work by women decades after it was made?</p>
+    <p><b>Finding:</b> The data points away from retroactive correction. Of the 160,705 artworks in the cleaned dataset, 142,505 have both a usable creation year, acquisition date, and a gender recorded as exactly "male" or "female." Within that group, women's work is acquired sooner after it is made than men's work, not later. The average gap is about 5.7 years (22.9 years for women vs. 28.6 years for men). This holds true in almost every decade from the 1930s to the 2020s. Only the 1970s is close to even. If MoMA were mainly catching up on overlooked women artists years after the fact, we would expect the opposite pattern, a longer wait for women, not a shorter one.</p>
+    <p><b>Nuance:</b> Acquisition lag has grown for both men and women over time. In the 1920s and 1930s, MoMA acquired art within about 10 years of it being made. Today that gap is 30 to 50 years for both genders. The gender difference sits on top of this larger trend, it does not replace it.</p>
+    <p><b>Limitations:</b> 18,200 artworks are excluded from this analysis, either because the creation year or acquisition date could not be determined, or because gender was missing or recorded as something other than exactly "male" or "female." Among the artworks that are included, men outnumber women roughly 6 to 1, and even more so before 1960. The 1920s has no acquisitions by women at all. A small number of records, 93 out of 142,505, show an artwork acquired slightly before its listed creation date, almost always because the creation date itself is approximate.</p>
+    <p><b>What this doesn't prove:</b> This shows a pattern, not a cause. We don't know why the gap exists; it could reflect deliberate MoMA acquisition strategy, market dynamics (contemporary women artists may be more visible/collectible sooner than in past decades), differences in which works get gender-attributed in the dataset, or something else entirely. This analysis can't distinguish between those explanations.</p>
+  </div>
+
+  <footer>Source: MoMA collection dataset (github.com/MuseumofModernArt/collection), Artworks.csv. Lag = acquisition year minus creation year, averaged within each decade of acquisition.</footer>
+</div>
+
+<script>
+const BINS = [-20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+const RAW = {"1920_male": [0, 0, 0, 0, 1, 4, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "1930_female": [0, 0, 0, 0, 22, 7, 7, 4, 1, 1, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], "1930_male": [0, 1, 0, 0, 548, 292, 172, 124, 224, 82, 7, 38, 26, 16, 47, 3, 0, 3, 10, 6, 1, 0, 3, 0], "1940_female": [0, 0, 0, 0, 190, 183, 74, 29, 15, 15, 6, 58, 15, 0, 2, 0, 1, 0, 2, 0, 0, 0, 0, 0], "1940_male": [0, 0, 0, 2, 1808, 726, 844, 649, 592, 453, 303, 241, 140, 93, 132, 46, 38, 14, 65, 103, 49, 5, 2, 9], "1950_female": [0, 0, 1, 0, 140, 43, 8, 7, 69, 24, 26, 11, 5, 3, 0, 7, 3, 0, 0, 0, 2, 2, 0, 0], "1950_male": [0, 0, 1, 5, 1990, 657, 331, 185, 254, 294, 505, 423, 285, 158, 159, 205, 173, 74, 12, 18, 7, 4, 2, 13], "1960_female": [0, 0, 0, 0, 378, 203, 41, 20, 33, 35, 57, 60, 35, 3, 6, 17, 20, 165, 5, 1, 0, 0, 1, 6], "1960_male": [0, 0, 0, 4, 6631, 4110, 3655, 4111, 5184, 1668, 2788, 2505, 2608, 1483, 713, 1615, 1267, 1593, 672, 53, 48, 134, 15, 929], "1970_female": [0, 0, 0, 0, 533, 360, 36, 23, 42, 75, 38, 137, 25, 118, 24, 35, 67, 93, 1, 0, 1, 0, 0, 1], "1970_male": [0, 0, 1, 38, 4335, 2590, 533, 215, 166, 423, 303, 170, 553, 498, 239, 165, 199, 194, 86, 60, 38, 96, 53, 391], "1980_female": [0, 0, 0, 4, 630, 94, 34, 21, 64, 21, 28, 20, 21, 7, 33, 10, 18, 34, 6, 2, 25, 2, 0, 4], "1980_male": [0, 0, 1, 9, 3561, 1004, 707, 388, 287, 160, 123, 253, 110, 152, 189, 206, 153, 124, 82, 75, 54, 78, 17, 890], "1990_female": [0, 0, 0, 1, 1297, 229, 158, 129, 38, 52, 66, 97, 185, 144, 103, 97, 22, 9, 17, 21, 2, 1, 1, 2], "1990_male": [0, 0, 0, 3, 2886, 1064, 516, 442, 424, 397, 364, 236, 229, 133, 124, 114, 178, 315, 270, 150, 59, 42, 17, 388], "2000_female": [0, 0, 0, 0, 1650, 1101, 491, 224, 78, 132, 132, 186, 304, 96, 14, 4, 9, 30, 88, 47, 74, 284, 8, 3], "2000_male": [0, 0, 0, 0, 3643, 1297, 1063, 509, 894, 927, 1222, 1262, 1656, 1373, 258, 226, 141, 373, 477, 429, 318, 220, 95, 296], "2010_female": [0, 0, 0, 10, 1314, 716, 354, 389, 257, 179, 223, 317, 915, 275, 190, 229, 90, 43, 12, 28, 101, 120, 96, 51], "2010_male": [0, 1, 0, 10, 2503, 960, 693, 637, 934, 1106, 772, 869, 2693, 993, 533, 480, 372, 274, 126, 229, 302, 610, 403, 650], "2020_female": [0, 0, 0, 0, 593, 78, 68, 135, 44, 72, 71, 132, 217, 129, 145, 46, 17, 17, 20, 27, 12, 29, 42, 120], "2020_male": [0, 0, 0, 1, 630, 356, 188, 204, 63, 50, 100, 104, 247, 225, 979, 297, 256, 817, 624, 104, 55, 151, 55, 75]};
+
+const DECADES = [1920,1930,1940,1950,1960,1970,1980,1990,2000,2010,2020];
+
+function stats(counts) {
+  const n = counts.reduce((a,b)=>a+b, 0);
+  if (n === 0) return null;
+  let sum = 0;
+  for (let i = 0; i < counts.length; i++) sum += ((BINS[i] + BINS[i+1]) / 2) * counts[i];
+  return { n, mean: sum / n };
+}
+
+const SERIES = {};
+const POOLED = { male: new Array(BINS.length - 1).fill(0), female: new Array(BINS.length - 1).fill(0) };
+DECADES.forEach(dec => {
+  ["male","female"].forEach(g => {
+    const counts = RAW[dec + "_" + g];
+    if (!counts) return;
+    SERIES[dec + "_" + g] = stats(counts);
+    counts.forEach((c, i) => POOLED[g][i] += c);
+  });
+});
+// Note: the binned/clipped histogram data above is precise enough for per-decade
+// display, but understates this pooled, whole-collection figure (men's heavier
+// long-tail gets compressed into one bucket, shrinking the estimated gap).
+// This headline uses the exact value from the unbinned computation in the notebook.
+const pooledGap = 22.894869 - 28.611652; // -5.716783
+document.getElementById("headlineGap").textContent =
+  (pooledGap >= 0 ? "+" : "−") + Math.abs(pooledGap).toFixed(1) + " yrs";
+
+// --- per-artwork Lag calculator ---
+const calcCreated = document.getElementById("calcCreated");
+const calcAcquired = document.getElementById("calcAcquired");
+const calcResult = document.getElementById("calcResult");
+function updateCalc() {
+  const c = Number(calcCreated.value), a = Number(calcAcquired.value);
+  if (Number.isFinite(c) && Number.isFinite(a)) {
+    calcResult.textContent = (a - c) + " years";
+  } else {
+    calcResult.textContent = "N/A";
+  }
+}
+calcCreated.addEventListener("input", updateCalc);
+calcAcquired.addEventListener("input", updateCalc);
+updateCalc();
+
+// --- decade gap explorer ---
+const decadePicker = document.getElementById("decadePicker");
+DECADES.forEach(dec => {
+  const opt = document.createElement("option");
+  opt.value = dec;
+  opt.textContent = dec + "s";
+  if (dec === 2020) opt.selected = true;
+  decadePicker.appendChild(opt);
+});
+const decadeResult = document.getElementById("decadeResult");
+function renderDecade() {
+  const dec = Number(decadePicker.value);
+  const m = SERIES[dec + "_male"], f = SERIES[dec + "_female"];
+  if (!f) {
+    decadeResult.innerHTML = `<span style="color:var(--ink-muted)">No acquisitions by women in the ${dec}s. Male average was ${m.mean.toFixed(1)} years (n=${m.n.toLocaleString()}).</span>`;
+    return;
+  }
+  const gap = f.mean - m.mean;
+  decadeResult.innerHTML = `
+    <span><span class="swatch" style="background:var(--series-male)"></span> Male avg: <b>${m.mean.toFixed(1)} yrs</b> <span style="color:var(--ink-muted)">(n=${m.n.toLocaleString()})</span></span>
+    <span><span class="swatch" style="background:var(--series-female)"></span> Female avg: <b>${f.mean.toFixed(1)} yrs</b> <span style="color:var(--ink-muted)">(n=${f.n.toLocaleString()})</span></span>
+    <span>Gap (F&minus;M): <b style="color:var(--accent)">${gap >= 0 ? "+" : "−"}${Math.abs(gap).toFixed(1)} yrs</b></span>
+  `;
+}
+decadePicker.addEventListener("change", renderDecade);
+renderDecade();
+
+// --- layout ---
+const leftMargin = 46, rightMargin = 20, topMargin = 26, bottomMargin = 52;
+const plotWidth = 660 - leftMargin - rightMargin;
+const plotHeight = 412 - topMargin - bottomMargin;
+const yMax = 50; // years, rounds up from the highest average (~46.9)
+
+function scaleX(i) { return leftMargin + (i / (DECADES.length - 1)) * plotWidth; }
+function scaleY(v) { return topMargin + plotHeight - (v / yMax) * plotHeight; }
+
+const svg = document.getElementById("chart");
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+// y gridlines + labels (every 10 years)
+for (let v = 0; v <= yMax; v += 10) {
+  const y = scaleY(v);
+  svg.appendChild(el("line", { class: "gridline", x1: leftMargin, x2: leftMargin + plotWidth, y1: y, y2: y }));
+  const t = el("text", { class: "axis-label", x: leftMargin - 8, y: y + 4, "text-anchor": "end" });
+  t.textContent = v;
+  svg.appendChild(t);
+}
+svg.appendChild(el("line", { class: "axis-line", x1: leftMargin, x2: leftMargin, y1: topMargin, y2: topMargin + plotHeight }));
+svg.appendChild(el("line", { class: "axis-line", x1: leftMargin, x2: leftMargin + plotWidth, y1: topMargin + plotHeight, y2: topMargin + plotHeight }));
+
+// x labels (decades)
+DECADES.forEach((dec, i) => {
+  const t = el("text", { class: "axis-label", x: scaleX(i), y: topMargin + plotHeight + 20, "text-anchor": "middle" });
+  t.textContent = dec + "s";
+  svg.appendChild(t);
+});
+const xTitle = el("text", { class: "axis-label", x: leftMargin + plotWidth / 2, y: topMargin + plotHeight + 36, "text-anchor": "middle" });
+xTitle.textContent = "decade the artwork was acquired";
+svg.appendChild(xTitle);
+const yTitle = el("text", { class: "axis-label", x: 14, y: topMargin - 10 });
+yTitle.textContent = "years";
+svg.appendChild(yTitle);
+
+function drawSeries(gender, labelAbove) {
+  const pts = [];
+  DECADES.forEach((dec, i) => {
+    const s = SERIES[dec + "_" + gender];
+    if (s) pts.push({ i, x: scaleX(i), y: scaleY(s.mean), mean: s.mean });
+  });
+  let d = "M " + pts.map(p => `${p.x} ${p.y}`).join(" L ");
+  svg.appendChild(el("path", { class: "line-" + gender, d }));
+  pts.forEach(p => {
+    svg.appendChild(el("circle", { class: "dot-" + gender, cx: p.x, cy: p.y, r: 3.5 }));
+    const t = el("text", {
+      class: "value-label value-" + gender, x: p.x, y: p.y + (labelAbove ? -9 : 16), "text-anchor": "middle"
+    });
+    t.textContent = p.mean.toFixed(1);
+    svg.appendChild(t);
+  });
+}
+drawSeries("male", true);
+drawSeries("female", false);
+
+// the 1920s female line simply starts at 1930 (no acquisitions that decade).
+// this is explained in the caveats panel below instead of being crammed into this tight corner of the chart.
+
+// table
+const tbody = document.getElementById("tableBody");
+DECADES.forEach(dec => {
+  const m = SERIES[dec + "_male"], f = SERIES[dec + "_female"];
+  const gapVal = (m && f) ? (f.mean - m.mean) : null;
+  const gap = gapVal === null ? "N/A" : (gapVal >= 0 ? "+" : "−") + Math.abs(gapVal).toFixed(1);
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${dec}s</td><td>${m ? m.mean.toFixed(1) : "N/A"}</td><td>${m ? m.n.toLocaleString() : "N/A"}</td><td>${f ? f.mean.toFixed(1) : "N/A"}</td><td>${f ? f.n.toLocaleString() : "N/A"}</td><td>${gap}</td>`;
+  tbody.appendChild(tr);
+});
+</script>
+</body>
+</html>
